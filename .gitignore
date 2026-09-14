@@ -1,0 +1,4 @@
+.otag
+.idea
+/dist
+/**/*.egg-info
