@@ -41,15 +41,11 @@ class Renderer:
             if self.use_ansi:
                 self._ensure_animator()
                 self._draw_live()
-            else:
-                self._static_event("start", node)
 
     def log(self, node, _message):
         with self.lock:
             if self.use_ansi:
                 self._draw_live()
-            else:
-                self._static_log(node, _message)
 
     def set_state(self, node, state=None):
         with self.lock:
@@ -61,15 +57,15 @@ class Renderer:
                 self._draw_live()
                 if not self._any_active():
                     self.spinner = 0
-            else:
-                if node.state in ("done", "failed"):
-                    self._static_event("terminal", node)
 
     def leave_cursor(self):
         with self.lock:
             if self.use_ansi:
+                self._draw_live()
                 self.stream.write("\033[?25h\n")
                 self.stream.flush()
+            else:
+                self._render_static_final()
             for root in self.roots:
                 if root.state != "running":
                     self._finalized.add(id(root))
@@ -98,28 +94,12 @@ class Renderer:
                 self.spinner += 1
                 self._draw_live()
 
-    def _static_event(self, kind, node):
-        width = compat.get_terminal_width(self.stream, 80)
-        indent = "  " * node.depth
-        prefix_len = node.depth * 2 + 2
-        content_width = max(0, width - prefix_len)
-        label = compat.truncate(node.label, content_width)
-        if kind == "start":
-            glyph = self.symbols.glyph("running", static=True)
-        else:
-            glyph = self.symbols.glyph(node.state, static=True)
-        self.stream.write(f"{indent}{glyph} {label}\n")
-        self.stream.flush()
-
-    def _static_log(self, node, message):
-        width = compat.get_terminal_width(self.stream, 80)
-        desc_col = (node.depth + 1) * 2
-        log_width = max(1, width - desc_col)
-        prefix = " " * desc_col
-        for part in compat.wrap_text(message, log_width):
-            self.stream.write(f"{prefix}{part}\n")
-        self.stream.flush()
-
+    def _render_static_final(self):
+        # otag: reuses ANSI _build_rows; O(number of live rows) per final frame.
+        rows = self._build_rows()
+        if rows:
+            self.stream.write("\n".join(rows) + "\n")
+            self.stream.flush()
     def _build_rows(self):
         rows = []
         for root in self.roots:
@@ -150,6 +130,8 @@ class Renderer:
             for msg in node.logs:
                 for part in compat.wrap_text(msg, log_width):
                     rows.append(self.style.log(f"{prefix}{part}", node.depth))
+
+        if node.state != "pending":
             for child in node.children:
                 self._append_node(rows, child)
 
@@ -158,14 +140,13 @@ class Renderer:
         out = ["\033[?25l"]
         if self.prev_rows:
             out.append(f"\033[{self.prev_rows}A")
-        else:
-            out.append("\r")
+        out.append("\r")
         for line in rows:
+            out.append("\033[2K")
             out.append(line)
-            out.append("\033[K\n")
-        for _ in range(self.prev_rows - len(rows)):
-            # otag: relies on standard ANSI Delete Line (\033[M); terminals without DL would keep ghost lines.
-            out.append("\033[M")
+            out.append("\n")
+        if self.prev_rows > len(rows):
+            out.append("\033[J")
         self.stream.write("".join(out))
         self.stream.flush()
         self.prev_rows = len(rows)
