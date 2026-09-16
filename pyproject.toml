@@ -4,15 +4,16 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "branchy"
-version = "1.0.0"
+version = "1.1.0"
 description = "Live hierarchical console process trees with zero dependencies."
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    { name="myteril", email="myteril@gmail.com" }
+    { name="Deniz Aktaş", email="myteril@gmail.com" }
 ]
-urls = {
-    "Repository" = "https://github.com/myteril/branchy",
-    "Bug Tracker" = "https://github.com/myteril/branchy/issues"
-}
+
+[project.urls]
+Homepage = "https://github.com/myteril/branchy"
+Repository = "https://github.com/myteril/branchy"
+"Bug Tracker" = "https://github.com/myteril/branchy/issues"
