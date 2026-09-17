@@ -78,7 +78,9 @@ class CaptureStream:
     @classmethod
     def _pop(cls, process):
         stack = getattr(cls._local, "stack", None)
-        if stack and stack[-1] is process:
+        if stack and process in stack:
+            # buffer is owned by the popped process; flush before it leaves
+            # the stack so the next sibling starts clean.
             try:
                 buf = getattr(process, "_capture_buffer", "")
                 if buf:
@@ -87,14 +89,15 @@ class CaptureStream:
                 pass
             finally:
                 process._capture_buffer = ""
-            stack.pop()
-        elif stack and process in stack:
-            stack.remove(process)
-        with cls._lock:
-            cls._active_count -= 1
-            if cls._active_count <= 0:
-                cls._active_count = 0
-                cls._uninstall()
+            if stack[-1] is process:
+                stack.pop()
+            else:
+                stack.remove(process)
+            with cls._lock:
+                cls._active_count -= 1
+                if cls._active_count <= 0:
+                    cls._active_count = 0
+                    cls._uninstall()
 
 
 _renderer = None
