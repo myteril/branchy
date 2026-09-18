@@ -83,8 +83,6 @@ class Renderer:
     def _any_active(self) -> bool:
         return any(self._is_active(r) for r in self.roots)
     def _has_active_sibling_after(self, children, idx):
-        # otag: O(n²) sibling scan per render pass; if child fan-out grows,
-        # memoize _is_active results once per _build_rows pass.
         return any(self._is_active(c) for c in children[idx + 1 :])
 
 
@@ -105,7 +103,6 @@ class Renderer:
                 self._draw_live()
 
     def _render_static_final(self):
-        # otag: reuses ANSI _build_rows; O(number of live rows) per final frame.
         rows = self._build_rows()
         if rows:
             self.stream.write("\n".join(rows) + "\n")
