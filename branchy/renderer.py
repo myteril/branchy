@@ -78,6 +78,12 @@ class Renderer:
 
     def _any_active(self) -> bool:
         return any(self._is_active(r) for r in self.roots)
+    def _has_active_sibling_after(self, children, idx):
+        # otag: O(n²) sibling scan per render pass; if child fan-out grows,
+        # memoize _is_active results once per _build_rows pass.
+        return any(self._is_active(c) for c in children[idx + 1 :])
+
+
 
     def _ensure_animator(self):
         if self._thread is not None and self._thread.is_alive():
@@ -95,26 +101,25 @@ class Renderer:
                 self._draw_live()
 
     def _render_static_final(self):
+        # otag: reuses ANSI _build_rows; O(number of live rows) per final frame.
         rows = self._build_rows()
         if rows:
             self.stream.write("\n".join(rows) + "\n")
             self.stream.flush()
     def _build_rows(self):
         rows = []
-        first = True
-        for root in self.roots:
+        for i, root in enumerate(self.roots):
             if id(root) in self._finalized:
                 continue
             if self._is_active(root) or root.state in ("done", "failed"):
-                self._append_node(rows, root, first=first)
-                first = False
+                omit_logs = (
+                    root.state in ("done", "failed")
+                    and self._has_active_sibling_after(self.roots, i)
+                )
+                self._append_node(rows, root, omit_logs=omit_logs)
         return rows
 
-    def _append_node(self, rows, node, *, first=True):
-        # blank separator between sibling subtrees keeps boundaries readable.
-        if not first:
-            rows.append("")
-
+    def _append_node(self, rows, node, omit_logs: bool = False):
         width = compat.get_terminal_width(self.stream, 80)
         indent = "  " * node.depth
         prefix_len = node.depth * 2 + 2
@@ -128,8 +133,7 @@ class Renderer:
         styled_label = self.style.summary(label, node.depth)
         rows.append(f"{indent}{glyph} {styled_label}")
 
-        # logs are owned by the node; only active/failed nodes display them.
-        if node.state in ("running", "failed"):
+        if not omit_logs and node.state in ("running", "failed"):
             desc_col = (node.depth + 1) * 2
             log_width = max(1, width - desc_col)
             prefix = " " * desc_col
@@ -138,11 +142,12 @@ class Renderer:
                     rows.append(self.style.log(f"{prefix}{part}", node.depth))
 
         if node.state != "pending":
-            first_child = True
-            for child in node.children:
-                if self._is_active(child) or child.state in ("done", "failed"):
-                    self._append_node(rows, child, first=first_child)
-                    first_child = False
+            for i, child in enumerate(node.children):
+                child_omit_logs = (
+                    child.state in ("done", "failed")
+                    and self._has_active_sibling_after(node.children, i)
+                )
+                self._append_node(rows, child, child_omit_logs)
 
     def _draw_live(self):
         rows = self._build_rows()
