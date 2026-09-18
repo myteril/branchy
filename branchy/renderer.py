@@ -17,6 +17,7 @@ class Renderer:
         self.prev_rows = 0
         self.spinner = 0
         self._thread = None
+        self._in_live = False
         self.roots: list = []
         self._finalized: set[int] = set()
         self.style = Style(self.stream)
@@ -62,8 +63,10 @@ class Renderer:
         with self.lock:
             if self.use_ansi:
                 self._draw_live()
-                self.stream.write("\033[?25h\n")
+                self.stream.write("\033[?1049l\033[?25h\n")
                 self.stream.flush()
+                self._in_live = False
+                self._render_static_final()
             else:
                 self._render_static_final()
             for root in self.roots:
@@ -71,6 +74,7 @@ class Renderer:
                     self._finalized.add(id(root))
             self.prev_rows = 0
             self.spinner = 0
+            self._in_live = False
     def _is_active(self, node) -> bool:
         if node.state == "running":
             return True
@@ -151,16 +155,19 @@ class Renderer:
 
     def _draw_live(self):
         rows = self._build_rows()
-        out = ["\033[?25l"]
-        if self.prev_rows:
-            out.append(f"\033[{self.prev_rows}A")
-        out.append("\r")
+        out = []
+        if self._in_live:
+            out.append("\033[H\033[J")
+        else:
+            # alternate-screen boundary; assumes xterm/VT-compatible
+            # support for ESC[?1049h and ED0. TERM=dumb bypasses this path.
+            out.append("\033[?1049h\033[H\033[J")
+            self._in_live = True
+        out.append("\033[?25l")
         for line in rows:
             out.append("\033[2K")
             out.append(line)
             out.append("\n")
-        if self.prev_rows > len(rows):
-            out.append("\033[J")
         self.stream.write("".join(out))
         self.stream.flush()
         self.prev_rows = len(rows)
