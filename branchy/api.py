@@ -90,12 +90,13 @@ class CaptureStream:
             stack.pop()
         elif stack and process in stack:
             stack.remove(process)
+        should_uninstall = False
         with cls._lock:
             cls._active_count -= 1
             if cls._active_count <= 0:
                 cls._active_count = 0
-                cls._uninstall()
-
+                should_uninstall = True
+        return should_uninstall
 
 _renderer = None
 
@@ -122,14 +123,18 @@ class Process:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        CaptureStream._pop(self)
-        if self._node.state == "running":
-            if exc_type:
-                self._node.fail(str(exc) if exc else "")
-            else:
-                self._node.complete()
-        if self._node.parent is None:
-            self.renderer.leave_cursor()
+        last = CaptureStream._pop(self)
+        try:
+            if self._node.state == "running":
+                if exc_type:
+                    self._node.fail(str(exc) if exc else "")
+                else:
+                    self._node.complete()
+            if self._node.parent is None:
+                self.renderer.leave_cursor()
+        finally:
+            if last:
+                CaptureStream._uninstall()
         return False
 
     def log(self, message):

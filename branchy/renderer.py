@@ -63,7 +63,11 @@ class Renderer:
         with self.lock:
             if self.use_ansi:
                 self._draw_live()
-                self.stream.write("\033[?1049l\033[?25h\n")
+                # assumes xterm/VT alternate-screen semantics:
+                # DECRST ?1049 restores main-screen cursor position.
+                # Emit CR+LF so the shell prompt lands at column 0 on a
+                # fresh line; TERM=dumb bypasses this path.
+                self.stream.write("\033[?1049l\033[?25h\r\n")
                 self.stream.flush()
                 self._in_live = False
                 self._render_static_final()
@@ -75,6 +79,8 @@ class Renderer:
             self.prev_rows = 0
             self.spinner = 0
             self._in_live = False
+            self.roots.clear()
+            self._finalized.clear()
     def _is_active(self, node) -> bool:
         if node.state == "running":
             return True
