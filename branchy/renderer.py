@@ -63,11 +63,14 @@ class Renderer:
         with self.lock:
             if self.use_ansi:
                 self._draw_live()
-                # assumes xterm/VT alternate-screen semantics:
-                # DECRST ?1049 restores main-screen cursor position.
-                # Emit CR+LF so the shell prompt lands at column 0 on a
-                # fresh line; TERM=dumb bypasses this path.
-                self.stream.write("\033[?1049l\033[?25h\r\n")
+                # otag: after restoring the main screen, clear the shell's
+                # prompt line so the previously typed command does not stay
+                # visible as the current input. Ceiling: relies on ANSI
+                # erase-in-line (ESC[2K) and cursor-horizontal-absolute
+                # (ESC[G); these are universally supported alongside the
+                # alternate-screen sequence ESC[?1049. Upgrade: use DECSC/DECRC
+                # or terminal capability queries if a target terminal breaks.
+                self.stream.write("\033[?1049l\033[?25h\033[2K\033[G")
                 self.stream.flush()
                 self._in_live = False
                 self._render_static_final()
