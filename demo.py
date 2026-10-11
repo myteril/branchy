@@ -5,32 +5,33 @@ from branchy import process
 
 
 def main():
-    with process("Deploy") as deploy:
+    with process("Deploy", show_elapsed=True) as deploy:
         deploy.log("resolving target")
         time.sleep(0.3)
+        deploy.rename("Deploy to production")
 
         with deploy.child("Validate") as v:
             v.log("schema ok")
             time.sleep(0.5)
 
-        with deploy.child("Build") as b:
+        with deploy.child("Build", show_elapsed=True) as b:
             with b.child("Compile") as c:
                 c.log("gcc -O2 main.c")
                 time.sleep(0.4)
-            with b.child("Link") as l:
+            with b.child("Link", show_elapsed=True) as l:
                 l.log("ld -o app")
                 time.sleep(0.4)
 
-    time.sleep(0.2)
+    time.sleep(0.3)
 
     try:
-        with process("Publish") as p:
+        with process("Publish", show_elapsed=True) as p:
             p.log("starting upload")
             time.sleep(0.3)
 
             with p.child("Sign package") as s:
                 s.log("private key not found")
-                time.sleep(0.2)
+                time.sleep(0.3)
                 raise RuntimeError("signing failed")
     except RuntimeError as exc:
         print(f"\nExpected failure captured: {exc}")

@@ -109,11 +109,11 @@ def _get_renderer():
 
 
 class Process:
-    def __init__(self, label, parent=None, renderer=None):
+    def __init__(self, label, parent=None, renderer=None, show_elapsed=False):
         from .tree import TreeNode
 
         self.renderer = renderer or _get_renderer()
-        self._node = TreeNode(label, parent, self.renderer)
+        self._node = TreeNode(label, parent, self.renderer, show_elapsed=show_elapsed)
         self._capture_buffer = ""
 
     def __enter__(self):
@@ -140,5 +140,9 @@ class Process:
     def log(self, message):
         self._node.log(str(message))
 
-    def child(self, label):
-        return Process(label, parent=self._node, renderer=self.renderer)
+    def rename(self, new_label):
+        self._node.rename(str(new_label))
+
+    def child(self, label, show_elapsed=False):
+        return Process(label, parent=self._node, renderer=self.renderer,
+                       show_elapsed=show_elapsed)

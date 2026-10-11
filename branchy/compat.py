@@ -60,3 +60,12 @@ def wrap_text(text: str, width: int):
         lines.append("".join(cur))
     return lines
 
+
+def format_duration(seconds: float, frozen: bool) -> str:
+    if seconds >= 60:
+        minutes, secs = divmod(int(seconds), 60)
+        return f"({minutes}m{secs:02d}s)"
+    if frozen:
+        return f"({seconds:.1f}s)"
+    return f"({int(seconds)}s)"
+

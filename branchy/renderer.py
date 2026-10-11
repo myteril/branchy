@@ -48,6 +48,22 @@ class Renderer:
             if self.use_ansi:
                 self._draw_live()
 
+    def rename(self, node):
+        with self.lock:
+            root = node
+            while root.parent is not None:
+                root = root.parent
+            if not any(root is r for r in self.roots):
+                # tree already finalized and deregistered; a redraw here
+                # would re-enter the alternate screen with an empty tree.
+                return
+            # otag: static (non-TTY) mode has no live frames, so rename
+            # stays silent; the final static render prints the last-set
+            # label. Ceiling: intermediate renames are unobservable there.
+            # Upgrade: emit rename events if static output ever streams.
+            if self.use_ansi:
+                self._draw_live()
+
     def set_state(self, node, state=None):
         with self.lock:
             if state is not None:
@@ -139,9 +155,29 @@ class Renderer:
         if node.state == "failed" and self.style.color:
             glyph = self.style.fail(glyph)
 
-        label = compat.truncate(node.label, content_width)
+        suffix = ""
+        if node.show_elapsed and node.state != "pending":
+            if node.state == "running":
+                elapsed = time.monotonic() - node.started
+                suffix = compat.format_duration(elapsed, False)
+            else:
+                suffix = compat.format_duration(node.duration, True)
+        budget = content_width
+        if suffix:
+            budget -= compat.str_width(suffix) + 1  # + 1: separating space
+        if suffix and budget <= 0:
+            # otag: documented narrow-terminal degenerate case - the label is
+            # dropped so the row is glyph + suffix only; truncate() would
+            # print "..." in a zero-width budget. Upgrade: steal width back
+            # from the suffix before dropping the label.
+            label = ""
+        else:
+            label = compat.truncate(node.label, budget)
         styled_label = self.style.summary(label, node.depth)
-        rows.append(f"{indent}{glyph} {styled_label}")
+        row = f"{indent}{glyph} {styled_label}"
+        if suffix:
+            row += " " + self.style.log(suffix, node.depth)
+        rows.append(row)
 
         if not omit_logs and node.state in ("running", "failed"):
             desc_col = (node.depth + 1) * 2
