@@ -53,6 +53,7 @@ with process("Build") as build:
 - `p.log(message)` appends transient output under the current node.
 - `p.child(label)` creates a nested process.
 - `p.rename(new_label)` retitles the running node — works on the root and on every child.
+- `p.input(prompt)` waits for one line of typed text: live rendering pauses, the cursor appears, and the prompt is written below the tree. Returns the text without its line ending. Works on the root and on every child. Prompts and answers are not logged automatically, and input is not masked.
 - `show_elapsed=True` (on `process` or `child`, off by default) shows that node's elapsed time: whole seconds while running, frozen at one-decimal precision once the node is done or failed.
 - Clean exit marks the node done and clears its transient logs.
 - Exception exit marks the node failed, keeps the logs, appends the exception message, and re-raises the exception.
@@ -102,6 +103,27 @@ The next frame simply carries the new name:
 ```
 
 The rename shows in the live view and in the final output. Renaming a finished node is a no-op — finalized rows are immutable — and a longer label re-truncates with `...` at the terminal width.
+
+## Interactive input
+
+`p.input(prompt)` blocks for one line of typed text. While it waits, the live spinner freezes, the cursor becomes visible, and the prompt appears at column 0 below the tree:
+
+```python
+from branchy import process
+
+with process("Deploy") as deploy:
+    target = deploy.input("Target environment [production]: ") or "production"
+    deploy.rename(f"Deploy to {target}")
+    with deploy.child("Credentials") as creds:
+        user = creds.input("Deploy user: ")
+        creds.rename(f"Credentials for {user}")
+```
+
+The returned text excludes its line ending; `EOFError` is raised at end of input. The prompt is written verbatim, unstyled and untruncated, and is never added to transient logs — the answer is not persisted either. Call `p.log(...)` yourself when the request matters for failure output. Input is not masked, so do not use it for secrets.
+
+On a live TTY the interaction is temporary: after Enter, EOF, or Ctrl-C, one clean redraw clears the prompt and the echoed answer, and the tree continues with the cursor hidden again. The wait still counts toward elapsed time, so the visible timer catches up after resume.
+
+Static output (non-TTY, `TERM=dumb`) has no animation to pause and emits no cursor control. The prompt is written once followed by exactly one newline, so sequential prompts and the final tree each start on their own line. A static TTY may echo the answer; redirected output contains only the prompt line. On EOF or Ctrl-C the exception propagates, the prompt is cleared, and the failure tree shows only what you logged before prompting.
 
 ## Elapsed time
 

@@ -8,7 +8,8 @@ def main():
     with process("Deploy", show_elapsed=True) as deploy:
         deploy.log("resolving target")
         time.sleep(0.3)
-        deploy.rename("Deploy to production")
+        target = deploy.input("Target environment [production]: ") or "production"
+        deploy.rename(f"Deploy to {target}")
 
         with deploy.child("Validate") as v:
             v.log("schema ok")

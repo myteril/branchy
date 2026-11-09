@@ -18,6 +18,7 @@ class Renderer:
         self.spinner = 0
         self._thread = None
         self._in_live = False
+        self._paused = False
         self.roots: list = []
         self._finalized: set[int] = set()
         self.style = Style(self.stream)
@@ -31,6 +32,23 @@ class Renderer:
             return self.stream.isatty()
         except Exception:
             return False
+
+    def pause(self) -> bool:
+        with self.lock:
+            if not self.use_ansi or not self._in_live:
+                return False
+            self._paused = True
+            self.stream.write("\033[?25h")
+            self.stream.flush()
+            return True
+
+    def resume(self):
+        with self.lock:
+            if not self._paused:
+                return
+            self._paused = False
+            # one full redraw wipes the prompt and the echoed answer
+            self._draw_live()
 
     def register(self, node):
         if node.parent is None:
@@ -124,6 +142,8 @@ class Renderer:
             with self.lock:
                 if not self._any_active():
                     break
+                if self._paused:
+                    continue
                 self.spinner += 1
                 self._draw_live()
 
@@ -196,6 +216,8 @@ class Renderer:
                 self._append_node(rows, child, child_omit_logs)
 
     def _draw_live(self):
+        if self._paused:
+            return
         rows = self._build_rows()
         out = []
         if self._in_live:

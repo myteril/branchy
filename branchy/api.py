@@ -1,3 +1,4 @@
+import builtins
 import sys
 import threading
 
@@ -142,6 +143,23 @@ class Process:
 
     def rename(self, new_label):
         self._node.rename(str(new_label))
+
+    def input(self, prompt=""):
+        prompt = str(prompt)
+        stream = self.renderer.stream
+        live = self.renderer.pause()
+        try:
+            if prompt:
+                stream.write(prompt)
+                stream.flush()
+            return builtins.input()
+        finally:
+            if live:
+                self.renderer.resume()
+            elif prompt:
+                # static view: one newline keeps later prompts and the tree on their own lines
+                stream.write("\n")
+                stream.flush()
 
     def child(self, label, show_elapsed=False):
         return Process(label, parent=self._node, renderer=self.renderer,
